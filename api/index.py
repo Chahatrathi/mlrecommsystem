@@ -39,7 +39,7 @@ except Exception as e:
     print(f"Kaggle Auth Error: {e}")
 
 def cleanup_tmp():
-    # CRITICAL: Use '/tmp' for Vercel Serverless compatibility
+    """CRITICAL: Use '/tmp' for Vercel Serverless compatibility."""
     folder = '/tmp'
     if not os.path.exists(folder):
         os.makedirs(folder)
@@ -51,7 +51,7 @@ def cleanup_tmp():
                 os.unlink(file_path)
             elif os.path.isdir(file_path):
                 shutil.rmtree(file_path)
-        except Exception as e:
+        except Exception:
             pass
 
 def get_combined_boundaries(df, top_models_list):
@@ -97,33 +97,32 @@ def get_combined_boundaries(df, top_models_list):
     })
 
 def download_kaggle_dataset(url):
+    """Downloads dataset from Kaggle to the writable /tmp directory."""
     parts = url.split('/')
     if 'datasets' in parts:
         idx = parts.index('datasets')
-        slug = f"{parts[idx+1]}/{parts[idx+2]}"
-        # Ensure Kaggle downloads to the correct /tmp directory
+        dataset_slug = f"{parts[idx+1]}/{parts[idx+2]}"
         download_path = '/tmp'
         cleanup_tmp()
-        api.dataset_download_files(slug, path=download_path, unzip=True)
+        api.dataset_download_files(dataset_slug, path=download_path, unzip=True)
         for file in os.listdir(download_path):
             if file.endswith('.csv'):
                 return pd.read_csv(os.path.join(download_path, file))
     return None
 
 def evaluate_and_recommend(df):
-    """Benchmarks models with validation and speed optimizations."""
+    """Benchmarks models with Cloud-specific timeout protections."""
+    # 1. Clean Target
     df = df.dropna(subset=[df.columns[-1]])
+    
+    # 2. Validation
     target_col = df.iloc[:, -1]
-    unique_classes = target_col.nunique()
-    
-    if unique_classes < 2:
-        raise ValueError(f"The target column '{df.columns[-1]}' only has one class. Classification requires at least 2 categories.")
-    
-    if unique_classes > (len(df) * 0.5):
-        raise ValueError("Target column has too many unique values. This looks like Regression data.")
+    if target_col.nunique() < 2:
+        raise ValueError("Target column needs at least 2 categories.")
 
-    if len(df) > 1000:
-        df = df.sample(1000, random_state=42)
+    # 3. Timeout Protection: Force a small sample for Vercel
+    if len(df) > 500:
+        df = df.sample(500, random_state=42)
 
     X = df.iloc[:, :-1]
     y = df.iloc[:, -1]
@@ -140,7 +139,8 @@ def evaluate_and_recommend(df):
     results_table = []
     for name, model in models.items():
         pipeline = Pipeline([('scaler', StandardScaler()), ('classifier', model)])
-        cv = cross_validate(pipeline, X, y, cv=3, scoring=['accuracy', 'f1_weighted'])
+        # Optimization: Use cv=2 for Vercel to stay under 10s
+        cv = cross_validate(pipeline, X, y, cv=2, scoring=['accuracy', 'f1_weighted'])
         results_table.append({
             "algorithm": name,
             "accuracy": cv['test_accuracy'].mean(),
