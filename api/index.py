@@ -39,6 +39,7 @@ except Exception as e:
     print(f"Kaggle Auth Error: {e}")
 
 def cleanup_tmp():
+    # CRITICAL: Use '/tmp' for Vercel Serverless compatibility
     folder = '/tmp'
     if not os.path.exists(folder):
         os.makedirs(folder)
@@ -100,7 +101,8 @@ def download_kaggle_dataset(url):
     if 'datasets' in parts:
         idx = parts.index('datasets')
         slug = f"{parts[idx+1]}/{parts[idx+2]}"
-        download_path = './tmp'
+        # Ensure Kaggle downloads to the correct /tmp directory
+        download_path = '/tmp'
         cleanup_tmp()
         api.dataset_download_files(slug, path=download_path, unzip=True)
         for file in os.listdir(download_path):
@@ -109,21 +111,17 @@ def download_kaggle_dataset(url):
     return None
 
 def evaluate_and_recommend(df):
-    """Benchmarks models with dataset validation and high-speed optimizations."""
-    # 1. Clean missing values from target
+    """Benchmarks models with validation and speed optimizations."""
     df = df.dropna(subset=[df.columns[-1]])
-    
-    # 2. Check if the target column is valid for classification
     target_col = df.iloc[:, -1]
     unique_classes = target_col.nunique()
     
     if unique_classes < 2:
-        raise ValueError(f"The target column '{df.columns[-1]}' only has one class. Classification requires at least 2 different categories.")
+        raise ValueError(f"The target column '{df.columns[-1]}' only has one class. Classification requires at least 2 categories.")
     
     if unique_classes > (len(df) * 0.5):
-        raise ValueError("Target column has too many unique values (over 50% of rows). This dataset is likely for Regression or is just a unique ID list.")
+        raise ValueError("Target column has too many unique values. This looks like Regression data.")
 
-    # 3. High-Speed Sampling for large datasets
     if len(df) > 1000:
         df = df.sample(1000, random_state=42)
 
@@ -142,7 +140,6 @@ def evaluate_and_recommend(df):
     results_table = []
     for name, model in models.items():
         pipeline = Pipeline([('scaler', StandardScaler()), ('classifier', model)])
-        # Use cv=3 for speed during live demo
         cv = cross_validate(pipeline, X, y, cv=3, scoring=['accuracy', 'f1_weighted'])
         results_table.append({
             "algorithm": name,
