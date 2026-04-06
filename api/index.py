@@ -39,7 +39,7 @@ except Exception as e:
     print(f"Kaggle Auth Error: {e}")
 
 def cleanup_tmp():
-    folder = './tmp'
+    folder = '/tmp'
     if not os.path.exists(folder):
         os.makedirs(folder)
         return
