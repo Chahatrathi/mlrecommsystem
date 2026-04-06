@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Model Benchmark | Glass UI</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --secondary: #a855f7;
+            --glass: rgba(255, 255, 255, 0.85);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
+            background-size: 400% 400%;
+            animation: gradient 5s ease infinite;
+            display: flex;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1000px;
+            background: var(--glass);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+
+        h1 {
+            font-weight: 800;
+            font-size: 2.5rem;
+            color: #1e293b;
+            margin-bottom: 10px;
+            letter-spacing: -1px;
+        }
+
+        .subtitle { color: #64748b; margin-bottom: 30px; font-size: 1.1rem; }
+
+        .upload-section {
+            background: rgba(255, 255, 255, 0.5);
+            border: 2px dashed var(--primary);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+        }
+
+        input[type="url"] {
+            width: 100%;
+            padding: 12px 20px;
+            border-radius: 12px;
+            border: 1px solid #ddd;
+            margin: 15px 0;
+            outline: none;
+            font-family: inherit;
+        }
+
+        button {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            padding: 14px 35px;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.6);
+        }
+
+        /* Results Table */
+        .results-card { margin-top: 40px; overflow: hidden; border-radius: 16px; border: 1px solid #e2e8f0; }
+        
+        table { width: 100%; border-collapse: collapse; background: white; }
+        
+        th { background: #f8fafc; padding: 18px; text-align: left; font-size: 0.9rem; color: #475569; text-transform: uppercase; }
+        
+        td { padding: 18px; border-top: 1px solid #f1f5f9; color: #1e293b; font-weight: 500; }
+
+        .rank-badge {
+            width: 30px; height: 30px; display: inline-flex; align-items: center; 
+            justify-content: center; border-radius: 50%; font-weight: bold;
+        }
+
+        .winner-row { background: rgba(99, 102, 241, 0.05); }
+        .winner-tag { color: #059669; background: #d1fae5; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; }
+
+        #plot-area {
+            width: 100%;
+            height: 600px;
+            margin-top: 30px;
+            border-radius: 20px;
+            overflow: hidden;
+            background: white;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
+        }
+
+        /* Loading Animation */
+        #loader { display: none; margin-top: 20px; }
+        .spinner {
+            width: 40px; height: 40px; border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary); border-radius: 50%;
+            animation: spin 1s linear infinite; margin: auto;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>ML  ALGORITHM </h1>
+        <h1>RECOMMENDATION SYSTEM</h1>
+        <p class="subtitle">Upload a dataset and let the system determine the optimal classifier for your data.</p>
+        
+        <div class="upload-section">
+            {% if error %}
+                <div style="color: #e11d48; background: #fff1f2; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
+                   ⚠️ {{ error }}
+                </div>
+            {% endif %}
+
+            <form method="post" enctype="multipart/form-data" onsubmit="showLoader()">
+                <div style="display: flex; flex-direction: column; align-items: center;">
+                    <input type="file" name="file" accept=".csv" id="fileInput" style="margin-bottom: 10px;">
+                    <span>OR</span>
+                    <input type="url" name="url" placeholder="Enter Kaggle URL or direct CSV link...">
+                    <button type="submit" id="submitBtn">Benchmark Now</button>
+                </div>
+            </form>
+            
+            <div id="loader">
+                <div class="spinner"></div>
+                <p style="margin-top: 10px; color: var(--primary); font-weight: 600;">Analyzing features & training models...</p>
+            </div>
+        </div>
+
+        {% if results %}
+            <div class="results-card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Algorithm</th>
+                            <th>Accuracy</th>
+                            <th>F1 Score</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for res in results %}
+                        <tr class="{{ 'winner-row' if loop.first else '' }}">
+                            <td>
+                                <span class="rank-badge" style="background: {{ '#fbbf24' if loop.first else '#e2e8f0' }}">
+                                    {{ loop.index }}
+                                </span>
+                            </td>
+                            <td>
+                                {{ res.algorithm }}
+                                {% if loop.first %}<span class="winner-tag">Recommended</span>{% endif %}
+                            </td>
+                            <td>{{ (res.accuracy * 100)|round(2) }}%</td>
+                            <td>{{ (res.f1_score * 100)|round(2) }}%</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <h2 style="margin-top: 50px; font-size: 1.5rem;">Visual Intelligence Space</h2>
+            <p style="color: #64748b; font-size: 0.9rem;">Comparing decision boundaries of the top 3 performers in 2D PCA space.</p>
+            <div id="plot-area"></div>
+
+            <script>
+                function showLoader() {
+                    document.getElementById('loader').style.display = 'block';
+                    document.getElementById('submitBtn').style.opacity = '0.5';
+                    document.getElementById('submitBtn').innerText = 'Processing...';
+                }
+
+                var data = {{ decision_json | safe }};
+                if (data) {
+                    var traces = [];
+                    var colors = ['#6366f1', '#8b5cf6', '#ec4899']; // Indigo, Violet, Pink
+
+                    data.boundaries.forEach((boundary, i) => {
+                        traces.push({
+                            z: boundary.zz,
+                            x: data.xx,
+                            y: data.yy,
+                            type: 'contour',
+                            showscale: false,
+                            contours: { coloring: 'none', showlines: true, type: 'constraint', operation: '=', value: 0.5 },
+                            line: { color: colors[i], width: 4, dash: i === 0 ? 'solid' : (i === 1 ? 'dash' : 'dot') },
+                            name: boundary.name
+                        });
+                    });
+
+                    traces.push({
+                        x: data.points_x, y: data.points_y,
+                        mode: 'markers', type: 'scatter',
+                        marker: { color: data.labels, colorscale: 'Portland', size: 10, line: { width: 1, color: 'white' } },
+                        name: 'Data Features'
+                    });
+
+                    var layout = {
+                        paper_bgcolor: 'rgba(0,0,0,0)',
+                        plot_bgcolor: 'rgba(0,0,0,0)',
+                        margin: { l: 40, r: 40, b: 80, t: 40 },
+                        legend: { orientation: 'h', y: -0.15 },
+                        xaxis: { showgrid: false, zeroline: false },
+                        yaxis: { showgrid: false, zeroline: false }
+                    };
+
+                    Plotly.newPlot('plot-area', traces, layout, {responsive: true});
+                }
+            </script>
+        {% endif %}
+    </div>
+</body>
+</html>
