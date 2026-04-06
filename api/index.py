@@ -1,8 +1,10 @@
 import os
 
-# --- CRITICAL FIX FOR VERCEL READ-ONLY FS ---
-# This must happen BEFORE importing KaggleApi
+# --- STEP 1: CRITICAL FIX FOR VERCEL READ-ONLY FS ---
+# This MUST happen at the very top before KaggleApi is imported
 os.environ['KAGGLE_CONFIG_DIR'] = "/tmp"
+os.environ['PYTHONWARNINGS'] = 'ignore'
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True' 
 
 import warnings
 import shutil
@@ -13,15 +15,11 @@ import json
 from flask import Flask, render_template, request
 from io import StringIO
 
-# --- STEP 1: SILENCE SYSTEM & ML WARNINGS ---
-os.environ['PYTHONWARNINGS'] = 'ignore'
-os.environ['KMP_DUPLICATE_LIB_OK'] = 'True' 
+# Silence warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 # --- STEP 2: SET KAGGLE CREDENTIALS ---
-# Note: In production, it is safer to set these in the Vercel Dashboard 
-# under Project Settings > Environment Variables
 os.environ['KAGGLE_USERNAME'] = "chahat"
 os.environ['KAGGLE_KEY'] = "KGAT_8d4015de4c1ee42491bcdc85bac6aace"
 
@@ -36,11 +34,12 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
 
+# --- STEP 3: CONFIGURE FLASK PATHS ---
+# Added '../templates' so Flask finds the folder in the project root
 app = Flask(__name__, template_folder='../templates')
 
 def get_kaggle_api():
     try:
-        # The library will now look in /tmp for config, which is allowed
         api = KaggleApi()
         api.authenticate()
         return api
@@ -50,7 +49,6 @@ def get_kaggle_api():
 
 def cleanup_tmp():
     folder = '/tmp'
-    # Check if folder exists; if not, create it (allowed in /tmp)
     if not os.path.exists(folder):
         os.makedirs(folder, exist_ok=True)
         return
@@ -62,7 +60,7 @@ def cleanup_tmp():
         except:
             pass
 
-# ... [rest of your helper functions: get_combined_boundaries, evaluate_and_recommend] ...
+# ... [Keep your helper functions: get_combined_boundaries, evaluate_and_recommend] ...
 
 def download_kaggle_dataset(url):
     api = get_kaggle_api()
@@ -82,7 +80,32 @@ def download_kaggle_dataset(url):
             print(f"Download Error: {e}")
     return None
 
-# ... [rest of your routes] ...
+@app.route("/", methods=["GET", "POST"])
+def home():
+    results, decision_json, error, source_info = [None]*4
+    if request.method == "POST":
+        file = request.files.get("file")
+        url = request.form.get("url")
+        df = None
+        try:
+            if url and "kaggle.com" in url:
+                df = download_kaggle_dataset(url)
+                source_info = "Kaggle Dataset"
+            elif url:
+                df = pd.read_csv(StringIO(requests.get(url).text))
+                source_info = "Remote CSV"
+            elif file:
+                df = pd.read_csv(file)
+                source_info = file.filename
+            
+            if df is not None: 
+                results, decision_json = evaluate_and_recommend(df)
+            else: 
+                error = "Invalid dataset source."
+        except Exception as e: 
+            error = str(e)
+                
+    return render_template("index.html", results=results, decision_json=decision_json, error=error, source_info=source_info)
 
 if __name__ == "__main__":
     app.run(debug=True)
